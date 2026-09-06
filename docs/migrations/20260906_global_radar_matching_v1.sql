@@ -1,0 +1,15 @@
+create table if not exists public.opportunity_sources (id uuid primary key default gen_random_uuid(), name text not null unique, source_type text not null default 'web', homepage_url text, feed_url text, country_scope text, region_scope text, language_code text, trust_status text not null default 'needs_review' check (trust_status in ('verified','needs_review','suspicious')), attribution_required boolean not null default true, active boolean not null default true, last_checked_at timestamptz, created_at timestamptz not null default now());
+create table if not exists public.opportunity_match_preferences (profile_id uuid primary key references public.profiles(id) on delete cascade, skills text[] not null default '{}', categories text[] not null default '{}', preferred_remote boolean, minimum_amount numeric, maximum_amount numeric, preferred_countries text[] not null default '{}', preferred_languages text[] not null default '{}', updated_at timestamptz not null default now());
+create table if not exists public.opportunity_match_events (id uuid primary key default gen_random_uuid(), profile_id uuid references public.profiles(id) on delete cascade, opportunity_id uuid references public.opportunities(id) on delete cascade, match_score numeric not null check (match_score >= 0 and match_score <= 100), reasons jsonb not null default '[]'::jsonb, created_at timestamptz not null default now(), unique(profile_id, opportunity_id));
+create index if not exists idx_opportunity_sources_active on public.opportunity_sources(active, trust_status);
+create index if not exists idx_match_events_profile_score on public.opportunity_match_events(profile_id, match_score desc);
+alter table public.opportunity_sources enable row level security;
+alter table public.opportunity_match_preferences enable row level security;
+alter table public.opportunity_match_events enable row level security;
+drop policy if exists opportunity_sources_public_read on public.opportunity_sources;
+create policy opportunity_sources_public_read on public.opportunity_sources for select using (active = true and trust_status <> 'suspicious');
+drop policy if exists match_preferences_own on public.opportunity_match_preferences;
+create policy match_preferences_own on public.opportunity_match_preferences for all using (auth.uid() = profile_id) with check (auth.uid() = profile_id);
+drop policy if exists match_events_own on public.opportunity_match_events;
+create policy match_events_own on public.opportunity_match_events for select using (auth.uid() = profile_id);
+insert into public.opportunity_sources(name,source_type,homepage_url,trust_status,attribution_required,active) values ('Jobicy','api','https://jobicy.com','verified',true,true),('Arbeitnow','api','https://arbeitnow.com','verified',true,true) on conflict (name) do update set active=excluded.active, trust_status=excluded.trust_status, homepage_url=excluded.homepage_url;
