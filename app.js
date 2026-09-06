@@ -78,14 +78,14 @@ async function requestEmailSlot(email,type){
   }catch(_){return {allowed:true}}
 }
 async function sendCode(){const email=$("authEmail").value.trim().toLowerCase();const status=$("authStatus");if(!/^\S+@gmail\.com$/i.test(email)){status.className="status error";status.textContent="Please use a valid Gmail address.";return}if(mode==="signup"&&!$("authName").value.trim()){status.className="status error";status.textContent="Enter your name first.";return}const cooldown=emailCooldownLeft(email);if(cooldown>0){status.className="status error";status.textContent=`Please wait ${Math.ceil(cooldown/1000)} seconds before requesting another email.`;return}pendingEmail=email;status.className="status";status.textContent="Sending your secure verification email…";$("sendOtp").disabled=true;const {error}=await db.auth.signInWithOtp({email,options:{shouldCreateUser:mode==="signup",data:mode==="signup"?{full_name:$("authName").value.trim()}:undefined,emailRedirectTo:location.href}});$("sendOtp").disabled=false;if(error){status.className="status error";status.textContent=error.message;return}armEmailCooldown(email);$("emailStep").classList.add("hidden");$("otpStep").classList.remove("hidden");$("authEyebrow").textContent="STEP 2 OF 2";$("step1").classList.remove("on");$("step2").classList.add("on");$("otpStatus").className="status ok";$("otpStatus").textContent="Check your Gmail and tap the verification link. This page will unlock automatically."}
-async function finishAccess(user){if(!user)return;const confirmed=!!user.email_confirmed_at;if(!confirmed){lockScreen();return}verifiedUser=user;document.body.dataset.locked="false";const name=user.user_metadata?.full_name||user.email?.split("@")[0]||"Member";const {error}=await db.from("profiles").upsert({id:user.id,display_name:name},{onConflict:"id"});if(error)console.warn("Profile sync:",error.message);closeAuth();$("accountArea").classList.remove("hidden");$("loginBtn").classList.add("hidden");$("signupBtn").classList.add("hidden");$("accountEmail").textContent=user.email;$("dashboard").classList.add("show");$("welcome").textContent=`Welcome, ${name}. Your Gmail is verified and your account is unlocked.`;$("savedStat").textContent=saved().length;window.scrollTo({top:document.getElementById("dashboard").offsetTop-80,behavior:"smooth"});toast("Email verified. Opportunity Radar unlocked.")}
+async function finishAccess(user){if(!user)return;const confirmed=!!user.email_confirmed_at;if(!confirmed){lockScreen();return}verifiedUser=user;document.body.dataset.locked="false";const name=user.user_metadata?.full_name||user.email?.split("@")[0]||"Member";const {error}=await db.from("profiles").upsert({id:user.id,display_name:name},{onConflict:"id"});if(error)console.warn("Profile sync:",error.message);closeAuth();$("accountArea").classList.remove("hidden");$("loginBtn").classList.add("hidden");setTimeout(()=>{refreshBilling();loadAdminConsole()},120);$("signupBtn").classList.add("hidden");$("accountEmail").textContent=user.email;$("dashboard").classList.add("show");$("welcome").textContent=`Welcome, ${name}. Your Gmail is verified and your account is unlocked.`;$("savedStat").textContent=saved().length;window.scrollTo({top:document.getElementById("dashboard").offsetTop-80,behavior:"smooth"});toast("Email verified. Opportunity Radar unlocked.")}
 async function restoreSession(){const {data}=await db.auth.getSession();if(data.session&&data.session.user?.email_confirmed_at){await finishAccess(data.session.user)}else{verifiedUser=null;$("accountArea").classList.add("hidden");$("loginBtn").classList.remove("hidden");$("signupBtn").classList.remove("hidden");setTimeout(lockScreen,150)}}
 async function logout(){await db.auth.signOut();verifiedUser=null;document.body.dataset.locked="true";$("dashboard").classList.remove("show");$("accountArea").classList.add("hidden");$("loginBtn").classList.remove("hidden");$("signupBtn").classList.remove("hidden");toast("Signed out. The radar is locked again.");setTimeout(()=>openAuth("signup"),150)}
 document.querySelectorAll("[data-scroll]").forEach(b=>b.addEventListener("click",()=>document.getElementById(b.dataset.scroll)?.scrollIntoView({behavior:"smooth"})));
 document.querySelectorAll("[data-filter]").forEach(b=>b.addEventListener("click",()=>{document.querySelectorAll("[data-filter]").forEach(x=>x.classList.remove("active"));b.classList.add("active");filter=b.dataset.filter;renderOpps()}));
 $("search").addEventListener("input",renderOpps);$("signupBtn").onclick=()=>openAuth("signup");$("heroSignup").onclick=()=>openAuth("signup");$("loginBtn").onclick=()=>openAuth("login");$("closeAuth").onclick=closeAuth;$("sendOtp").onclick=sendCode;$("verifyOtp").onclick=async()=>{const {data}=await db.auth.getSession();if(data.session) await finishAccess(data.session.user);else toast("Open the latest verification email first, then return here.",false)};$("resendOtp").onclick=sendCode;$("changeEmail").onclick=()=>openAuth(mode);$("switchLogin").onclick=()=>openAuth("login");$("logoutBtn").onclick=logout;$("authModal").addEventListener("click",e=>{if(e.target.id==="authModal")closeAuth()});
 db.auth.onAuthStateChange((_event,session)=>{if(session?.user)finishAccess(session.user)});
-renderOpps();updateSavedCount();restoreSession();
+renderOpps();updateSavedCount();restoreSession();setTimeout(()=>{refreshBilling();loadAdminConsole()},500);
 
 
 /* AUTH-FIRST ENTRY GATE */
@@ -140,6 +140,75 @@ renderOpps();updateSavedCount();restoreSession();
   gate('gateCheckVerify').onclick=async()=>{status('Checking verification…');const {data}=await db.auth.getSession();if(data.session?.user?.email_confirmed_at){await check()}else status('Not verified yet. Open the latest Gmail verification email, tap the link, then return here.','error')};
   gate('gateResend').onclick=async()=>{const {data}=await db.auth.getSession();const email=(data.session?.user?.email||gate('gateVerifyEmail').textContent||'').trim().toLowerCase();if(!email)return status('Start account creation first.','error');const cooldown=emailCooldownLeft(email);if(cooldown>0){status(`Please wait ${Math.ceil(cooldown/1000)} seconds before requesting another email.` ,'error');return}const slot=await requestEmailSlot(email,'resend');if(slot?.allowed===false){const wait=slot.retry_after?` Try again in about ${slot.retry_after} seconds.`:'';status(slot.reason==='provider_window'?'Email delivery is temporarily at its provider limit. Use the latest verification email.'+wait:'A verification email was requested recently.'+wait,'error');return}status('Sending one verification email…','');const {error}=await db.auth.resend({type:'signup',email,options:{emailRedirectTo:location.href}});if(!error)armEmailCooldown(email);status(error?(error.message.includes('rate')?'Email delivery is temporarily rate-limited. Use the latest verification email and wait before requesting another.':error.message):'A new verification email was sent.',''+(error?'error':'ok'))};
   lock(); check();
+})();
+
+
+
+/* BILLING + PARTNERS */
+const RADAR_PRO_PLAN_CODE='PLN_qkucb5ysmguphjm';
+const RADAR_PRO_PAYMENT_PAGE='https://paystack.com/pay/opportunity-radar-pro';
+async function getSubscription(){
+  if(!verifiedUser)return null;
+  const {data,error}=await db.from('subscriptions').select('*').eq('user_id',verifiedUser.id).maybeSingle();
+  if(error){console.warn('Subscription read:',error.message);return null}
+  return data;
+}
+function renderBilling(sub){
+  const pro=!!sub&&sub.plan==='radar_pro'&&['active','non-renewing','attention'].includes(sub.status);
+  const badge=$('planBadge'),title=$('planTitle'),summary=$('planSummary'),status=$('planStatus'),renewal=$('planRenewal'),up=$('billingUpgradeBtn'),manage=$('manageSubscriptionBtn');
+  if(!badge)return;
+  badge.textContent=pro?'RADAR PRO':'FREE'; title.textContent=pro?'Radar Pro':'Radar Free';
+  summary.textContent=pro?'Your advanced Radar tools are active.':'Core opportunity discovery is free for everyone.';
+  status.textContent=pro?`Status: ${sub.status}`:'Status: Free';
+  renewal.textContent=pro?(sub.next_payment_at?`Next payment: ${new Date(sub.next_payment_at).toLocaleDateString()}`:'Renewal date pending'):'No renewal scheduled';
+  up.classList.toggle('hidden',pro); manage.classList.toggle('hidden',!pro);
+  document.body.dataset.pro=pro?'true':'false';
+  document.querySelectorAll('[data-pro-only]').forEach(el=>el.classList.toggle('pro-locked',!pro));
+}
+async function refreshBilling(){
+  const sub=await getSubscription(); renderBilling(sub); return sub;
+}
+async function startProCheckout(){
+  if(!verifiedUser){openAuth('login');return}
+  const email=verifiedUser.email||'';
+  try{
+    const {data,error}=await db.functions.invoke('radar-billing',{body:{action:'checkout'}});
+    if(!error&&data?.authorization_url){location.href=data.authorization_url;return}
+  }catch(err){console.warn('Secure checkout endpoint unavailable:',err)}
+  const fallback=`${RADAR_PRO_PAYMENT_PAGE}?email=${encodeURIComponent(email)}&read-only=email`;
+  toast('Opening the secure Paystack checkout. After payment, return here and refresh your plan.',true);
+  window.open(fallback,'_blank','noopener');
+}
+async function submitPartnerLead(e){
+  e.preventDefault(); if(!verifiedUser){openAuth('login');return}
+  const row={user_id:verifiedUser.id,organization_name:$('partnerOrg').value.trim(),email:$('partnerEmail').value.trim(),request_type:$('partnerType').value,message:$('partnerMessage').value.trim()};
+  if(!row.organization_name||!row.email)return;
+  const {error}=await db.from('partner_leads').insert(row);
+  if(error){toast('We could not submit the partnership request yet.',false);console.warn(error.message);return}
+  $('partnerForm').reset(); toast('Partnership request received. It will be reviewed before publication.');
+}
+async function loadAdminConsole(){
+  if(!verifiedUser||verifiedUser.app_metadata?.role!=='admin')return;
+  $('adminConsole')?.classList.remove('hidden');
+  try{
+    const {data,error}=await db.functions.invoke('radar-billing',{body:{action:'admin_metrics'}});
+    if(error||!data)return;
+    $('adminSubCount').textContent=String(data.active_pro??0);
+    $('adminPartnerCount').textContent=String(data.open_partners??0);
+    $('adminRevenue').textContent=`₦${(Number(data.revenue_kobo||0)/100).toLocaleString()}`;
+  }catch(err){console.warn('Admin metrics:',err)}
+}
+function bindBilling(){
+  $('upgradeProBtn')?.addEventListener('click',startProCheckout);
+  $('billingUpgradeBtn')?.addEventListener('click',startProCheckout);
+  $('manageSubscriptionBtn')?.addEventListener('click',async()=>{try{const {data,error}=await db.functions.invoke('radar-billing',{body:{action:'manage'}});if(!error&&data?.link){window.open(data.link,'_blank','noopener');return}}catch(err){console.warn(err)}toast('Subscription management is temporarily unavailable.',false)});
+  $('partnerBtn')?.addEventListener('click',()=>document.getElementById('partner')?.scrollIntoView({behavior:'smooth'}));
+  $('partnerForm')?.addEventListener('submit',submitPartnerLead);
+}
+bindBilling();
+(async function(){
+  const ref=new URLSearchParams(location.search).get('reference');
+  if(ref&&verifiedUser){try{const {data}=await db.functions.invoke('radar-billing',{body:{action:'sync',reference:ref}});if(data?.pro){toast('Payment verified. Radar Pro is being activated.');await refreshBilling()}}catch(err){console.warn('Payment sync:',err)}}
 })();
 
 /* INTERACTION LAYER */
