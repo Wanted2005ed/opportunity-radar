@@ -1,5 +1,5 @@
 (() => {
-const U='https://dspemuisfagoxwkpluyh.supabase.co',K='sb_publishable_nuMjOyMSW6hRYKTSndknNg_b1gP6dox',db= supabase.createClient(U,K);
+const U='https://dspemuisfagoxwkpluyh.supabase.co',K='sb_publishable_nuMjOyMSW68RYKTSndkkNg_b1gP6dox',db= supabase.createClient(U,K);
 const esc=v=>String(v??'').replace(/[&<>\"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;'}[m]));
 const currencies=['AUD','BRL','CAD','CHF','CNY','EUR','GBP','GHS','INR','JPY','KES','NGN','NOK','NZD','PKR','RUB','SAR','SEK','SGD','USD','XAF','XOF','ZAR'];
 const countryNames=['Argentina','Australia','Austria','Bangladesh','Belgium','Brazil','Canada','China','Colombia','Egypt','France','Germany','Ghana','India','Indonesia','Ireland','Italy','Japan','Kenya','Mexico','Netherlands','New Zealand','Nigeria','Norway','Pakistan','Philippines','Portugal','Rwanda','Saudi Arabia','Singapore','South Africa','South Korea','Spain','Sweden','Switzerland','Tanzania','Thailand','Türkiye','United Arab Emirates','United Kingdom','United States','Vietnam','Zambia'];
