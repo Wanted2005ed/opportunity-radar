@@ -11,6 +11,15 @@ const opportunities=[
  {id:5,type:"Compete",title:"Security skills sprint",meta:"Short challenge · Portfolio proof",trust:"✓ Verified source",desc:"Practice defensive security thinking and record your achievement."},
  {id:6,type:"Learn",title:"Scholarship research hub",meta:"Funding · Global · Free",trust:"✓ Verified source",desc:"Discover funding research methods and organize application evidence."}
 ];
+const opportunityUrlMap={1:"https://www.cybrary.it/",2:"https://solve.mit.edu/challenges",3:"https://www.coursera.org/",4:"https://jobs.unicef.org/en-us/listing/",5:"https://www.cybrary.it/",6:"https://www.globalyouthinitiatives.com/opportunities"};
+opportunities.forEach(o=>{if(!o.url&&opportunityUrlMap[o.id])o.url=opportunityUrlMap[o.id]});
+const externalOpportunityHubs=[
+ {type:"Jobs & internships",title:"UNICEF Careers",meta:"Global · 18+ · Official source",trust:"Official source",url:"https://jobs.unicef.org/en-us/listing/",desc:"Explore current UNICEF vacancies and internships. Work listings remain age-gated for adult eligibility."},
+ {type:"Scholarships & programs",title:"Global Youth Initiatives",meta:"Global · Scholarships · Programs · Competitions",trust:"External source",url:"https://www.globalyouthinitiatives.com/opportunities",desc:"A large opportunity index covering scholarships, summer programs, competitions, internships and study opportunities."},
+ {type:"Competitions",title:"MIT Solve Challenges",meta:"Global · Innovation · Open challenges",trust:"Official source",url:"https://solve.mit.edu/challenges",desc:"Global open-innovation challenges where people and teams can submit solutions to real-world problems."},
+ {type:"Learning",title:"UNICEF Internship Programme",meta:"Global · Students & recent graduates",trust:"Official source",url:"https://www.unicef.org/careers/internships",desc:"Official information about UNICEF internships, requirements and how to apply."},
+ {type:"Opportunities",title:"Opportunity Radar Sources",meta:"Jobs · Scholarships · Competitions · Learning",trust:"Radar network",url:"https://wanted2005ed.github.io/opportunity-radar/",desc:"Opportunity Radar will keep expanding its verified-source network so useful opportunities can be discovered from one place."}
+];
 const saved=()=>JSON.parse(localStorage.getItem("or_saved")||"[]");
 const saveIds=()=>{localStorage.setItem("or_saved",JSON.stringify(saved()));updateSavedCount()};
 function updateSavedCount(){const n=saved().length;document.querySelectorAll("[data-saved-count]").forEach(x=>x.textContent=n)}
@@ -30,10 +39,31 @@ function renderOpps(){
   updateSavedCount();
 }
 
-function openOpportunity(id){const o=opportunities.find(x=>x.id===id);if(!o)return;if(o.type==="Work"){toast("Work listings are 18+ and cannot be opened from this account.",false);return}openAuth("login");toast(`Sign in to open: ${o.title}`)}
+function openOpportunity(id){const o=opportunities.find(x=>x.id===id);if(!o)return;if(o.type==="Work"){toast("Work listings are 18+ and are shown for discovery only.",false);return}if(!verifiedUser){openAuth("login");return}showOpportunityDetail(o)}
+function showOpportunityDetail(o){
+  let m=$("opportunityDetail");
+  if(!m){
+    m=document.createElement("div");
+    m.id="opportunityDetail";
+    m.className="modal hidden";
+    m.innerHTML="<button class=\"close\" id=\"closeOpportunityDetail\">×</button><div class=\"detail-card\"><div class=\"eyebrow\" id=\"detailType\"></div><h2 id=\"detailTitle\"></h2><p id=\"detailMeta\"></p><p id=\"detailDesc\"></p><div class=\"detail-actions\"><button class=\"btn primary\" id=\"detailAction\">Open opportunity</button><button class=\"btn\" id=\"detailSave\">Save to My Radar</button></div><div class=\"detail-note\">Trust status: <strong id=\"detailTrust\"></strong></div></div>";
+    document.body.appendChild(m);
+    $("closeOpportunityDetail").onclick=()=>m.classList.add("hidden");
+    m.onclick=e=>{if(e.target===m)m.classList.add("hidden")};
+  }
+  $("detailType").textContent=o.type;
+  $("detailTitle").textContent=o.title;
+  $("detailMeta").textContent=o.meta;
+  $("detailDesc").textContent=o.desc;
+  $("detailTrust").textContent=o.trust;
+  const url=o.url||"#";
+  $("detailAction").onclick=()=>{if(url!=="#")window.open(url,"_blank","noopener,noreferrer");else toast("This listing is currently being verified. Check back soon.",false)};
+  $("detailSave").onclick=()=>toggleSave(o.id);
+  m.classList.remove("hidden");
+}
 function toggleSave(id){const arr=saved();const i=arr.indexOf(id);if(i>=0){arr.splice(i,1);toast("Removed from your saved radar.")}else{arr.push(id);toast("Saved to your radar.")}localStorage.setItem("or_saved",JSON.stringify(arr));renderOpps()}
 function lockScreen(){document.body.dataset.locked="true";openAuth("signup");}
-function openAuth(nextMode="signup"){mode=nextMode;$("authModal").classList.remove("hidden");$("emailStep").classList.remove("hidden");$("otpStep").classList.add("hidden");$("authStatus").textContent="";$("otpStatus").textContent="";$("authEmail").value=pendingEmail;$("authTitle").textContent=mode==="signup"?"Create your account":"Welcome back";$("authSubtitle").textContent="Use your Gmail address. We will email you a secure verification link. Access opens only after your email is verified.";$("nameField").classList.toggle("hidden",mode!=="signup");$("switchLogin").classList.toggle("hidden",mode!=="signup");$("authEyebrow").textContent="STEP 1 OF 2";$("step1").classList.add("on");$("step2").classList.remove("on");setTimeout(()=>$("authEmail").focus(),50)}
+function openAuth(nextMode="signup"){if(verifiedUser){closeAuth();toast("You are already signed in. Your Radar is unlocked.");return}mode=nextMode;$("authModal").classList.remove("hidden");$("emailStep").classList.remove("hidden");$("otpStep").classList.add("hidden");$("authStatus").textContent="";$("otpStatus").textContent="";$("authEmail").value=pendingEmail;$("authTitle").textContent=mode==="signup"?"Create your account":"Welcome back";$("authSubtitle").textContent="Use your Gmail address. We will email you a secure verification link. Access opens only after your email is verified.";$("nameField").classList.toggle("hidden",mode!=="signup");$("switchLogin").classList.toggle("hidden",mode!=="signup");$("authEyebrow").textContent="STEP 1 OF 2";$("step1").classList.add("on");$("step2").classList.remove("on");setTimeout(()=>$("authEmail").focus(),50)}
 function closeAuth(){if(!verifiedUser&&document.body.dataset.locked==="true"){toast("Verify your Gmail first. Your account is still locked.",false);return}$("authModal").classList.add("hidden")}
 const EMAIL_COOLDOWN_MS=65000;
 const emailCooldownKey=email=>`or_email_cooldown_${email}`;
