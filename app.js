@@ -15,17 +15,7 @@ const saved=()=>JSON.parse(localStorage.getItem("or_saved")||"[]");
 const saveIds=()=>{localStorage.setItem("or_saved",JSON.stringify(saved()));updateSavedCount()};
 function updateSavedCount(){const n=saved().length;document.querySelectorAll("[data-saved-count]").forEach(x=>x.textContent=n)}
 function toast(msg,ok=true){let t=$("toast");if(!t){t=document.createElement("div");t.id="toast";t.style.cssText="position:fixed;right:18px;bottom:18px;z-index:100;background:#10233a;border:1px solid #356080;color:#fff;padding:13px 16px;border-radius:12px;box-shadow:0 15px 40px rgba(0,0,0,.35);max-width:340px";document.body.appendChild(t)}t.textContent=msg;t.style.borderColor=ok?"#356080":"#8a4450";clearTimeout(window.__toast);window.__toast=setTimeout(()=>t.remove(),3200)}
-function renderOpps(){
-  const q=$("search").value.toLowerCase();
-  const list=opportunities.filter(o=>(filter==="All"||o.type===filter)&&(`${o.title} ${o.meta} ${o.desc}`.toLowerCase().includes(q)));
-  $("oppList").innerHTML=list.map(o=>{
-    const isSaved=saved().includes(o.id);
-    const savedLabel=isSaved?"★ Saved":"☆ Save";
-    return `<article class="card opp"><span class="trust">${o.trust}</span><span class="tag">${o.type}</span><h3>${o.title}</h3><div class="meta">${o.meta}</div><p style="margin-top:10px">${o.desc}</p><div style="display:flex;gap:8px;margin-top:15px"><button class="btn primary" onclick="openOpportunity(${o.id})">View details →</button><button class="btn" onclick="toggleSave(${o.id})">${savedLabel}</button></div></article>`;
-  }).join("")||`<article class="card"><h3>No matching signals</h3><p>Try another search. The algorithm has not yet conquered the entire universe.</p></article>`;
-  $("radarCount").textContent=list.length;
-  updateSavedCount();
-}
+function renderOpps(){const q=$("search").value.toLowerCase();const list=opportunities.filter(o=>(filter==="All"||o.type===filter)&&(`${o.title} ${o.meta} ${o.desc}`.toLowerCase().includes(q)));$("oppList").innerHTML=list.map(o=>{const isSaved=saved().includes(o.id);return `<article class="card opp"><span class="trust">${o.trust}</span><span class="tag">${o.type}</span><h3>${o.title}</h3><div class="meta">${o.meta}</div><p style="margin-top:10px">${o.desc}</p><div style="display:flex;gap:8px;margin-top:15px"><button class="btn primary" onclick="openOpportunity(${o.id})">View details →</button><button class="btn" onclick="toggleSave(${o.id)}">${isSaved?"★ Saved":"☆ Save"}</button></div></article>`}).join("")||`<article class="card"><h3>No matching signals</h3><p>Try another search. The algorithm has not yet conquered the entire universe.</p></article>`;$("radarCount").textContent=list.length;updateSavedCount()}
 function openOpportunity(id){const o=opportunities.find(x=>x.id===id);if(!o)return;if(o.type==="Work"){toast("Work listings are 18+ and cannot be opened from this account.",false);return}openAuth("login");toast(`Sign in to open: ${o.title}`)}
 function toggleSave(id){const arr=saved();const i=arr.indexOf(id);if(i>=0){arr.splice(i,1);toast("Removed from your saved radar.")}else{arr.push(id);toast("Saved to your radar.")}localStorage.setItem("or_saved",JSON.stringify(arr));renderOpps()}
 function lockScreen(){document.body.dataset.locked="true";openAuth("signup");}
@@ -33,63 +23,30 @@ function openAuth(nextMode="signup"){mode=nextMode;$("authModal").classList.remo
 function closeAuth(){if(!verifiedUser&&document.body.dataset.locked==="true"){toast("Verify your Gmail first. Your account is still locked.",false);return}$("authModal").classList.add("hidden")}
 async function sendCode(){const email=$("authEmail").value.trim().toLowerCase();const status=$("authStatus");if(!/^\S+@gmail\.com$/i.test(email)){status.className="status error";status.textContent="Please use a valid Gmail address.";return}if(mode==="signup"&&!$("authName").value.trim()){status.className="status error";status.textContent="Enter your name first.";return}pendingEmail=email;status.className="status";status.textContent="Sending your secure verification email…";$("sendOtp").disabled=true;const {error}=await db.auth.signInWithOtp({email,options:{shouldCreateUser:mode==="signup",data:mode==="signup"?{full_name:$("authName").value.trim()}:undefined,emailRedirectTo:location.href}});$("sendOtp").disabled=false;if(error){status.className="status error";status.textContent=error.message;return}$("emailStep").classList.add("hidden");$("otpStep").classList.remove("hidden");$("authEyebrow").textContent="STEP 2 OF 2";$("step1").classList.remove("on");$("step2").classList.add("on");$("otpStatus").className="status ok";$("otpStatus").textContent="Check your Gmail and tap the verification link. This page will unlock automatically."}
 async function finishAccess(user){if(!user)return;const confirmed=!!user.email_confirmed_at;if(!confirmed){lockScreen();return}verifiedUser=user;document.body.dataset.locked="false";const name=user.user_metadata?.full_name||user.email?.split("@")[0]||"Member";const {error}=await db.from("profiles").upsert({id:user.id,display_name:name},{onConflict:"id"});if(error)console.warn("Profile sync:",error.message);closeAuth();$("accountArea").classList.remove("hidden");$("loginBtn").classList.add("hidden");$("signupBtn").classList.add("hidden");$("accountEmail").textContent=user.email;$("dashboard").classList.add("show");$("welcome").textContent=`Welcome, ${name}. Your Gmail is verified and your account is unlocked.`;$("savedStat").textContent=saved().length;window.scrollTo({top:document.getElementById("dashboard").offsetTop-80,behavior:"smooth"});toast("Email verified. Opportunity Radar unlocked.")}
-async function restoreSession(){const {data}=await db.auth.getSession();if(data.session&&data.session.user?.email_confirmed_at){await finishAccess(data.session.user)}else{verifiedUser=null;document.body.dataset.locked="true";$("accountArea").classList.add("hidden");$("loginBtn").classList.remove("hidden");$("signupBtn").classList.remove("hidden")}}
+async function restoreSession(){const {data}=await db.auth.getSession();if(data.session&&data.session.user?.email_confirmed_at){await finishAccess(data.session.user)}else{verifiedUser=null;$("accountArea").classList.add("hidden");$("loginBtn").classList.remove("hidden");$("signupBtn").classList.remove("hidden");setTimeout(lockScreen,150)}}
 async function logout(){await db.auth.signOut();verifiedUser=null;document.body.dataset.locked="true";$("dashboard").classList.remove("show");$("accountArea").classList.add("hidden");$("loginBtn").classList.remove("hidden");$("signupBtn").classList.remove("hidden");toast("Signed out. The radar is locked again.");setTimeout(()=>openAuth("signup"),150)}
 document.querySelectorAll("[data-scroll]").forEach(b=>b.addEventListener("click",()=>document.getElementById(b.dataset.scroll)?.scrollIntoView({behavior:"smooth"})));
 document.querySelectorAll("[data-filter]").forEach(b=>b.addEventListener("click",()=>{document.querySelectorAll("[data-filter]").forEach(x=>x.classList.remove("active"));b.classList.add("active");filter=b.dataset.filter;renderOpps()}));
 $("search").addEventListener("input",renderOpps);$("signupBtn").onclick=()=>openAuth("signup");$("heroSignup").onclick=()=>openAuth("signup");$("loginBtn").onclick=()=>openAuth("login");$("closeAuth").onclick=closeAuth;$("sendOtp").onclick=sendCode;$("verifyOtp").onclick=async()=>{const {data}=await db.auth.getSession();if(data.session) await finishAccess(data.session.user);else toast("Open the latest verification email first, then return here.",false)};$("resendOtp").onclick=sendCode;$("changeEmail").onclick=()=>openAuth(mode);$("switchLogin").onclick=()=>openAuth("login");$("logoutBtn").onclick=logout;$("authModal").addEventListener("click",e=>{if(e.target.id==="authModal")closeAuth()});
 db.auth.onAuthStateChange((_event,session)=>{if(session?.user)finishAccess(session.user)});
 renderOpps();updateSavedCount();restoreSession();
-
-
-/* AUTH-FIRST ENTRY GATE */
+\n\n/* AUTH-FIRST ENTRY GATE */\n(function(){\n  const gate=id=>document.getElementById(id);\n  const status=(msg,type='')=>{const el=gate('gateStatus');el.textContent=msg;el.className='gate-status '+type};\n  const show=(id,on)=>gate(id).classList.toggle('hidden',!on);\n  const setTab=tab=>{\n    gate('gateLoginTab').classList.toggle('active',tab==='login');\n    gate('gateSignupTab').classList.toggle('active',tab==='signup');\n    show('gateLoginPane',tab==='login'); show('gateSignupPane',tab==='signup');\n    show('gateVerifyPane',false); status('');\n  };\n  const unlock=()=>{document.body.classList.remove('auth-locked');gate('authGate').classList.add('hidden');};\n  const lock=()=>{document.body.classList.add('auth-locked');gate('authGate').classList.remove('hidden');};\n  async function check(){\n    const {data}=await db.auth.getSession(); const u=data.session?.user;\n    if(!u){lock();setTab('login');return}\n    if(!u.email_confirmed_at){\n      gate('gateVerifyEmail').textContent=u.email||''; show('gateLoginPane',false);show('gateSignupPane',false);show('gateLoginTab',false);show('gateSignupTab',false);show('gateVerifyPane',true);\n      gate('gateTitle').textContent='Verify your Gmail'; gate('gateSubtitle').textContent='One last step before your Opportunity Radar access opens.'; lock(); return;\n    }\n    unlock();\n    if(typeof finishAccess==='function') await finishAccess(u);\n  }\n  gate('gateLoginTab').onclick=()=>setTab('login'); gate('gateSignupTab').onclick=()=>setTab('signup');\n  gate('gateLoginBtn').onclick=async()=>{\n    const email=gate('gateLoginEmail').value.trim().toLowerCase(), password=gate('gateLoginPassword').value;\n    if(!email.endsWith('@gmail.com')) return status('Use a Gmail address.','error');\n    if(!password) return status('Enter your password.','error');\n    status('Signing you in…');\n    const {data,error}=await db.auth.signInWithPassword({email,password});\n    if(error)return status(error.message,'error');\n    if(!data.user?.email_confirmed_at){return check()}\n    await check();\n  };\n  gate('gateSignupBtn').onclick=async()=>{\n    const name=gate('gateSignupName').value.trim(), email=gate('gateSignupEmail').value.trim().toLowerCase(), password=gate('gateSignupPassword').value;\n    if(!name)return status('Enter your name.','error');\n    if(!email.endsWith('@gmail.com'))return status('Use a Gmail address.','error');\n    if(password.length<8)return status('Use at least 8 characters for your password.','error');\n    status('Creating your account…');\n    const {data,error}=await db.auth.signUp({email,password,options:{data:{full_name:name},emailRedirectTo:location.href}});\n    if(error)return status(error.message,'error');\n    if(data.user?.email_confirmed_at)return check();\n    gate('gateVerifyEmail').textContent=email; gate('gateTitle').textContent='Verify your Gmail'; gate('gateSubtitle').textContent='Your account is created, but the platform is still locked.';\n    show('gateLoginPane',false);show('gateSignupPane',false);show('gateLoginTab',false);show('gateSignupTab',false);show('gateVerifyPane',true);\n    status('Verification email sent. Open Gmail and tap the secure link.','ok');\n  };\n  gate('gateCheckVerify').onclick=async()=>{status('Checking verification…');const {data}=await db.auth.getSession();if(data.session?.user?.email_confirmed_at){await check()}else status('Not verified yet. Open the latest Gmail verification email, tap the link, then return here.','error')};\n  gate('gateResend').onclick=async()=>{const {data}=await db.auth.getSession();const email=data.session?.user?.email||gate('gateVerifyEmail').textContent;if(!email)return status('Start account creation first.','error');const {error}=await db.auth.resend({type:'signup',email,options:{emailRedirectTo:location.href}});status(error?error.message:'A new verification email was sent.',''+(error?'error':'ok'))};\n  lock(); check();\n})();\n
+/* INTERACTION LAYER */
 (function(){
-  const gate=id=>document.getElementById(id);
-  const status=(msg,type='')=>{const el=gate('gateStatus');el.textContent=msg;el.className='gate-status '+type};
-  const show=(id,on)=>gate(id).classList.toggle('hidden',!on);
-  const setTab=tab=>{
-    gate('gateLoginTab').classList.toggle('active',tab==='login');
-    gate('gateSignupTab').classList.toggle('active',tab==='signup');
-    show('gateLoginPane',tab==='login'); show('gateSignupPane',tab==='signup');
-    show('gateVerifyPane',false); status('');
-  };
-  const unlock=()=>{document.body.classList.remove('auth-locked');gate('authGate').classList.add('hidden');};
-  const lock=()=>{document.body.classList.add('auth-locked');gate('authGate').classList.remove('hidden');};
-  async function check(){
-    const {data}=await db.auth.getSession(); const u=data.session?.user;
-    if(!u){lock();setTab('login');return}
-    if(!u.email_confirmed_at){
-      gate('gateVerifyEmail').textContent=u.email||''; show('gateLoginPane',false);show('gateSignupPane',false);show('gateLoginTab',false);show('gateSignupTab',false);show('gateVerifyPane',true);
-      gate('gateTitle').textContent='Verify your Gmail'; gate('gateSubtitle').textContent='One last step before your Opportunity Radar access opens.'; lock(); return;
-    }
-    unlock();
-    if(typeof finishAccess==='function') await finishAccess(u);
-  }
-  gate('gateLoginTab').onclick=()=>setTab('login'); gate('gateSignupTab').onclick=()=>setTab('signup');
-  gate('gateLoginBtn').onclick=async()=>{
-    const email=gate('gateLoginEmail').value.trim().toLowerCase(), password=gate('gateLoginPassword').value;
-    if(!email.endsWith('@gmail.com')) return status('Use a Gmail address.','error');
-    if(!password) return status('Enter your password.','error');
-    status('Signing you in…');
-    const {data,error}=await db.auth.signInWithPassword({email,password});
-    if(error)return status(error.message,'error');
-    if(!data.user?.email_confirmed_at){return check()}
-    await check();
-  };
-  gate('gateSignupBtn').onclick=async()=>{
-    const name=gate('gateSignupName').value.trim(), email=gate('gateSignupEmail').value.trim().toLowerCase(), password=gate('gateSignupPassword').value;
-    if(!name)return status('Enter your name.','error');
-    if(!email.endsWith('@gmail.com'))return status('Use a Gmail address.','error');
-    if(password.length<8)return status('Use at least 8 characters for your password.','error');
-    status('Creating your account…');
-    const {data,error}=await db.auth.signUp({email,password,options:{data:{full_name:name},emailRedirectTo:location.href}});
-    if(error)return status(error.message,'error');
-    if(data.user?.email_confirmed_at)return check();
-    gate('gateVerifyEmail').textContent=email; gate('gateTitle').textContent='Verify your Gmail'; gate('gateSubtitle').textContent='Your account is created, but the platform is still locked.';
-    show('gateLoginPane',false);show('gateSignupPane',false);show('gateLoginTab',false);show('gateSignupTab',false);show('gateVerifyPane',true);
-    status('Verification email sent. Open Gmail and tap the secure link.','ok');
-  };
-  gate('gateCheckVerify').onclick=async()=>{status('Checking verification…');const {data}=await db.auth.getSession();if(data.session?.user?.email_confirmed_at){await check()}else status('Not verified yet. Open the latest Gmail verification email, tap the link, then return here.','error')};
-  gate('gateResend').onclick=async()=>{const {data}=await db.auth.getSession();const email=data.session?.user?.email||gate('gateVerifyEmail').textContent;if(!email)return status('Start account creation first.','error');const {error}=await db.auth.resend({type:'signup',email,options:{emailRedirectTo:location.href}});status(error?error.message:'A new verification email was sent.',''+(error?'error':'ok'))};
-  lock(); check();
+ const add=(tag,props={})=>{const e=document.createElement(tag);Object.assign(e,props);return e};
+ const progress=add('div',{id:'scrollProgress'});document.body.appendChild(progress);
+ const glow=add('div',{id:'cursorGlow'});document.body.appendChild(glow);
+ window.addEventListener('scroll',()=>{const d=document.documentElement;progress.style.width=((d.scrollTop/(d.scrollHeight-d.clientHeight))*100)+'%'} ,{passive:true});
+ window.addEventListener('pointermove',e=>{glow.style.left=e.clientX+'px';glow.style.top=e.clientY+'px'},{passive:true});
+ const reveal=()=>{document.querySelectorAll('[data-reveal]').forEach((el,i)=>{if(el.getBoundingClientRect().top<innerHeight*.88){setTimeout(()=>el.classList.add('revealed'),Math.min(i*55,350))}})};
+ const mark=()=>document.querySelectorAll('main section,.hero,.card,.signal,.dashbar').forEach((el,i)=>{if(!el.hasAttribute('data-reveal'))el.setAttribute('data-reveal','')});
+ mark();reveal();window.addEventListener('scroll',reveal,{passive:true});
+ document.addEventListener('click',e=>{const b=e.target.closest('button,.btn');if(!b||b.disabled)return;const r=b.getBoundingClientRect(),s=add('span',{className:'ripple'});s.style.width=s.style.height=Math.max(r.width,r.height)+'px';s.style.left=e.clientX-r.left-Math.max(r.width,r.height)/2+'px';s.style.top=e.clientY-r.top-Math.max(r.width,r.height)/2+'px';b.style.position='relative';b.style.overflow='hidden';b.appendChild(s);setTimeout(()=>s.remove(),600)});
+ document.querySelectorAll('.card').forEach(card=>{card.addEventListener('pointermove',e=>{if(innerWidth<800)return;const r=card.getBoundingClientRect(),x=(e.clientX-r.left)/r.width-.5,y=(e.clientY-r.top)/r.height-.5;card.style.transform=`perspective(900px) rotateX(${y*-2.5}deg) rotateY(${x*3}deg) translateY(-6px)`});card.addEventListener('pointerleave',()=>card.style.transform='')});
+ document.querySelectorAll('.btn.primary,.hero button').forEach(b=>{b.classList.add('magnetic');b.addEventListener('pointermove',e=>{if(innerWidth<700)return;const r=b.getBoundingClientRect();b.style.transform=`translate(${(e.clientX-r.left-r.width/2)*.08}px,${(e.clientY-r.top-r.height/2)*.08}px)`});b.addEventListener('pointerleave',()=>b.style.transform='')});
+ // Make navigation feel app-like and close to the current viewport.
+ document.querySelectorAll('[data-scroll]').forEach(b=>b.addEventListener('click',()=>{const target=document.getElementById(b.dataset.scroll);if(target)target.scrollIntoView({behavior:'smooth',block:'start'})}));
+ // Keyboard shortcut: / focuses the opportunity search.
+ document.addEventListener('keydown',e=>{if(e.key==='/'&&!/input|textarea/i.test(document.activeElement.tagName)){e.preventDefault();document.getElementById('search')?.focus()}});
+ setTimeout(reveal,100);
 })();
