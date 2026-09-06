@@ -12,7 +12,42 @@
 .modal{position:fixed;inset:0;z-index:50;background:rgba(2,8,15,.78);backdrop-filter:blur(14px);display:grid;place-items:center;padding:18px}.auth{width:min(470px,100%);background:#0b192a;border:1px solid #29435e;border-radius:24px;box-shadow:var(--shadow);overflow:hidden}.auth-top{padding:25px 25px 15px}.auth-top h2{font:700 28px 'Space Grotesk';margin:0 0 7px}.auth-top p{color:var(--muted);line-height:1.5;margin:0}.auth-body{padding:0 25px 25px}.step{display:flex;gap:8px;margin:17px 0}.step i{height:5px;flex:1;border-radius:99px;background:#1c3047}.step i.on{background:linear-gradient(90deg,var(--brand),var(--brand2))}.field{margin:12px 0}.field label{display:block;color:#cbd7e6;font-size:13px;margin-bottom:6px}.field input{width:100%;background:#07111f;border:1px solid #29415b;color:#fff;padding:13px;border-radius:11px;outline:none}.field input:focus{border-color:var(--brand)}.auth-btn{width:100%;padding:13px;border:0;border-radius:11px;background:linear-gradient(135deg,var(--brand),#6387ff);font-weight:800;color:#06101c;margin-top:8px}.back{background:none;border:0;color:var(--muted);margin-top:10px;padding:8px}.status{min-height:20px;margin:12px 0;color:var(--muted);font-size:13px}.status.error{color:#ff9aa5}.status.ok{color:#7bf1b1}.otp{letter-spacing:8px;text-align:center;font-size:26px;font-weight:700}.close{position:absolute;right:18px;top:14px;background:none;border:0;color:#aab9cb;font-size:25px}.account{display:flex;align-items:center;gap:8px;color:#b9f4ff;font-size:13px}.account button{background:none;border:0;color:#ff9aa5}.dashboard{display:none;padding:24px 0 60px}.dashboard.show{display:block}.dashbar{display:flex;justify-content:space-between;gap:15px;align-items:center;background:#0c1a2b;border:1px solid var(--line);padding:18px;border-radius:16px}.dashbar h2{margin:0;font-family:'Space Grotesk'}.dashgrid{margin-top:14px;display:grid;grid-template-columns:repeat(4,1fr);gap:12px}.stat{padding:17px;background:#0c1a2b;border:1px solid var(--line);border-radius:14px}.stat b{font:700 25px 'Space Grotesk';display:block}.stat span{font-size:12px;color:var(--muted)}
 @media(max-width:850px){.links{display:none}.hero{grid-template-columns:1fr;padding-top:55px}.grid{grid-template-columns:1fr 1fr}.opps{grid-template-columns:1fr}.dashgrid{grid-template-columns:1fr 1fr}}@media(max-width:560px){.nav{height:62px}.nav-actions .btn:first-child{display:none}.hero h1{letter-spacing:-2px}.grid{grid-template-columns:1fr}.signal{display:none}.section{padding-bottom:45px}.dashbar{align-items:flex-start;flex-direction:column}}
 </style></head>
-<body>
+<body class="auth-locked">
+<div id="authGate" aria-modal="true" role="dialog">
+  <div class="gate-card">
+    <div class="gate-brand"><div class="gate-mark">◈</div><span>Opportunity Radar</span></div>
+    <div class="gate-copy">
+      <span class="gate-kicker">PRIVATE ACCESS</span>
+      <h1 id="gateTitle">Log in to Opportunity Radar</h1>
+      <p id="gateSubtitle">Your account is the key. Create one or log in, then verify your Gmail before anything inside the platform becomes available.</p>
+    </div>
+    <div class="gate-tabs"><button id="gateLoginTab" class="gate-tab active">Log in</button><button id="gateSignupTab" class="gate-tab">Create account</button></div>
+    <div id="gateLoginPane">
+      <input id="gateLoginEmail" type="email" autocomplete="email" placeholder="Gmail address">
+      <input id="gateLoginPassword" type="password" autocomplete="current-password" placeholder="Password">
+      <button id="gateLoginBtn" class="gate-primary">Log in</button>
+    </div>
+    <div id="gateSignupPane" class="hidden">
+      <input id="gateSignupName" type="text" autocomplete="name" placeholder="Full name">
+      <input id="gateSignupEmail" type="email" autocomplete="email" placeholder="Gmail address">
+      <input id="gateSignupPassword" type="password" autocomplete="new-password" placeholder="Create a password">
+      <button id="gateSignupBtn" class="gate-primary">Create account</button>
+    </div>
+    <div id="gateVerifyPane" class="hidden">
+      <div class="gate-verify-icon">✉</div>
+      <h2>Verify your Gmail</h2>
+      <p>We sent a secure verification link to <strong id="gateVerifyEmail"></strong>. Open Gmail, tap the verification link, then return here. Access stays locked until verification succeeds.</p>
+      <button id="gateCheckVerify" class="gate-primary">I verified my Gmail</button>
+      <button id="gateResend" class="gate-secondary">Resend verification email</button>
+    </div>
+    <div id="gateStatus" class="gate-status" role="status"></div>
+    <div class="gate-foot">Email verification is required before platform access.</div>
+  </div>
+</div>
+<style>
+body.auth-locked>header,body.auth-locked>main,body.auth-locked>footer{visibility:hidden!important}#authGate{position:fixed;inset:0;z-index:99999;display:grid;place-items:center;padding:22px;background:radial-gradient(circle at 50% 0,#153b72 0,rgba(7,17,31,.97) 42%,#050b14 100%);font-family:'DM Sans',sans-serif}#authGate.hidden{display:none!important}.gate-card{width:min(440px,100%);padding:30px;border:1px solid #29435e;border-radius:24px;background:rgba(12,26,43,.96);box-shadow:0 30px 90px rgba(0,0,0,.55)}.gate-brand{display:flex;align-items:center;gap:10px;font-weight:800;font-size:17px;margin-bottom:34px}.gate-mark{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;background:linear-gradient(135deg,#43d9ff,#7c5cff);color:#07111f}.gate-kicker{font-size:11px;letter-spacing:2px;color:#43d9ff;font-weight:800}.gate-copy h1{font-size:32px;line-height:1.05;margin:9px 0 10px}.gate-copy p{color:#9fb0c4;line-height:1.6;margin:0 0 24px}.gate-tabs{display:grid;grid-template-columns:1fr 1fr;background:#07111f;border:1px solid #29435e;border-radius:12px;padding:4px;margin-bottom:16px}.gate-tab{border:0;background:transparent;color:#9fb0c4;padding:11px;border-radius:9px;font-weight:800}.gate-tab.active{background:#193652;color:#fff}.gate-card input{width:100%;box-sizing:border-box;background:#07111f;border:1px solid #29435e;color:#fff;padding:14px;border-radius:11px;margin:6px 0;outline:0}.gate-card input:focus{border-color:#43d9ff}.gate-primary,.gate-secondary{width:100%;padding:14px;border-radius:11px;border:0;font-weight:800;margin-top:8px}.gate-primary{background:linear-gradient(135deg,#43d9ff,#6387ff);color:#06101b}.gate-secondary{background:transparent;border:1px solid #29435e;color:#cbd7e6}.gate-status{min-height:20px;margin-top:14px;color:#9fb0c4;font-size:13px}.gate-status.error{color:#ff9aa5}.gate-status.ok{color:#7be0b2}.gate-verify-icon{font-size:42px;margin-bottom:8px}.gate-verify-pane h2{margin:0 0 8px}.gate-verify-pane p{color:#9fb0c4;line-height:1.6}.gate-foot{text-align:center;color:#65778e;font-size:11px;margin-top:22px}.hidden{display:none!important}@media(max-width:560px){.gate-card{padding:24px}.gate-copy h1{font-size:28px}}
+</style>
+
 <header class="top"><div class="wrap nav"><div class="logo"><div class="logo-mark">⌁</div>Opportunity Radar</div><nav class="links"><button data-scroll="opportunities">Opportunities</button><button data-scroll="learn">Learn</button><button data-scroll="communities">Communities</button><button data-scroll="competitions">Competitions</button></nav><div class="nav-actions"><button class="btn" id="loginBtn">Log in</button><button class="btn primary" id="signupBtn">Create account</button><div class="account hidden" id="accountArea"><span id="accountEmail"></span><button id="logoutBtn">Log out</button></div></div></div></header>
 <main>
 <section class="wrap hero"><div><span class="eyebrow">● LIVE GLOBAL OPPORTUNITY RADAR</span><h1>Find a path.<br><span>Build proof.</span><br>Move forward.</h1><p>One place for scholarships, jobs, competitions, learning, communities and skill proof. Your radar gets smarter as your profile gets stronger.</p><div class="hero-cta"><button class="btn primary" id="heroSignup">Start with Gmail verification →</button><button class="btn" data-scroll="opportunities">Explore opportunities</button></div></div><div class="signal"><div class="radar-ring"><div class="radar-core"><strong id="radarCount">0</strong><small>signals on your radar</small></div></div></div></section>
