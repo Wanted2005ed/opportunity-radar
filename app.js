@@ -24,6 +24,27 @@ const saved=()=>JSON.parse(localStorage.getItem("or_saved")||"[]");
 const saveIds=()=>{localStorage.setItem("or_saved",JSON.stringify(saved()));updateSavedCount()};
 function updateSavedCount(){const n=saved().length;document.querySelectorAll("[data-saved-count]").forEach(x=>x.textContent=n)}
 function toast(msg,ok=true){let t=$("toast");if(!t){t=document.createElement("div");t.id="toast";t.style.cssText="position:fixed;right:18px;bottom:18px;z-index:100;background:#10233a;border:1px solid #356080;color:#fff;padding:13px 16px;border-radius:12px;box-shadow:0 15px 40px rgba(0,0,0,.35);max-width:340px";document.body.appendChild(t)}t.textContent=msg;t.style.borderColor=ok?"#356080":"#8a4450";clearTimeout(window.__toast);window.__toast=setTimeout(()=>t.remove(),3200)}
+const scholarshipAccessCache=new Set();
+function isPaidScholarship(o){return /scholarship|scholarships|funding opportunity/i.test(`${o.title} ${o.type} ${o.meta}`)}
+async function hasScholarshipAccess(opportunityId){
+  if(scholarshipAccessCache.has(opportunityId)) return true;
+  if(!verifiedUser) return false;
+  const {data,error}=await db.from('scholarship_access').select('id').eq('user_id',verifiedUser.id).eq('opportunity_id',opportunityId).maybeSingle();
+  if(!error&&data){scholarshipAccessCache.add(opportunityId);return true}
+  return false;
+}
+async function scholarshipPayment(o){
+  if(!verifiedUser){openAuth('login');return}
+  const existing=await hasScholarshipAccess(o.id); if(existing){showOpportunityDetail(o);return}
+  let m=document.getElementById('scholarshipPayModal');
+  if(!m){m=document.createElement('div');m.id='scholarshipPayModal';m.className='modal hidden';m.innerHTML='<div class="detail-card scholarship-pay-modal"><button class="close" id="scholarshipPayClose">×</button><div class="eyebrow">SCHOLARSHIP ACCESS</div><h2 id="scholarshipPayTitle">Unlock this scholarship</h2><div class="quote" id="scholarshipQuote">Loading local price…</div><p class="fine">Base access is €4. The amount shown is the €4 equivalent in the supported payment currency for your profile/country. Payment is processed securely by Paystack.</p><div class="pay-status" id="scholarshipPayStatus"></div><button class="btn primary" id="scholarshipPayButton">Continue to secure payment</button></div>';document.body.appendChild(m);m.onclick=e=>{if(e.target===m)m.classList.add('hidden')};document.getElementById('scholarshipPayClose').onclick=()=>m.classList.add('hidden')}
+  m.classList.remove('hidden');document.getElementById('scholarshipPayTitle').textContent=`Unlock: ${o.title}`;const qel=document.getElementById('scholarshipQuote'), status=document.getElementById('scholarshipPayStatus'), pay=document.getElementById('scholarshipPayButton');qel.textContent='Loading local price…';status.textContent='';pay.disabled=true;
+  const {data:quote,error}=await db.functions.invoke('scholarship-access',{body:{action:'quote'}});
+  if(error||!quote){status.textContent='Could not calculate the local price right now. Please try again.';status.className='pay-status error';return}
+  const symbols={NGN:'₦',GHS:'GH₵',KES:'KSh',ZAR:'R',USD:'$',XOF:'CFA'};qel.textContent=`${symbols[quote.currency]||quote.currency} ${Number(quote.amount).toLocaleString()} · €4 equivalent`;pay.disabled=false;
+  pay.onclick=async()=>{pay.disabled=true;status.textContent='Preparing secure checkout…';status.className='pay-status';const {data:init,error:initErr}=await db.functions.invoke('scholarship-access',{body:{action:'initialize',opportunityId:o.id,callbackUrl:location.href}});if(initErr||!init?.authorization_url){status.textContent=initErr?.message||init?.error||'Could not start payment.';status.className='pay-status error';pay.disabled=false;return}location.href=init.authorization_url};
+}
+async function handleScholarshipReturn(){const ref=new URLSearchParams(location.search).get('reference');if(!ref)return;const {data,error}=await db.functions.invoke('scholarship-access',{body:{action:'verify',reference:ref}});if(!error&&data?.unlocked){if(data.opportunity_id)scholarshipAccessCache.add(data.opportunity_id);history.replaceState({},'',location.pathname+location.hash);renderOpps();toast('Scholarship unlocked successfully.');const o=opportunities.find(x=>String(x.id)===String(data.opportunity_id));if(o)showOpportunityDetail(o)}else{history.replaceState({},'',location.pathname+location.hash);toast('Payment could not be verified yet. If you completed it, refresh shortly.',false)}}
 function renderOpps(){
   const q=$("search").value.toLowerCase();
   const list=opportunities.filter(o=>{
@@ -33,13 +54,13 @@ function renderOpps(){
   });
   $("oppList").innerHTML=list.map(o=>{
     const isSaved=saved().includes(o.id);
-    return '<article class="card opp"><span class="trust">'+o.trust+'</span><span class="tag">'+o.type+'</span><h3>'+o.title+'</h3><div class="meta">'+o.meta+'</div><p style="margin-top:10px">'+o.desc+'</p><div style="display:flex;gap:8px;margin-top:15px"><button class="btn primary" onclick="openOpportunity('+o.id+')">View details →</button><button class="btn" onclick="toggleSave('+o.id+')">'+(isSaved?'★ Saved':'☆ Save')+'</button></div></article>';
+    const paid=isPaidScholarship(o); return '<article class="card opp '+(paid?'scholarship-locked':'')+'"><span class="trust">'+o.trust+'</span><span class="tag">'+o.type+'</span><h3>'+o.title+'</h3><div class="meta">'+o.meta+'</div><p style="margin-top:10px">'+o.desc+'</p>'+(paid?'<div class="scholarship-lock"><div><strong>🔒 Scholarship access</strong><small>€4 equivalent in your supported currency</small></div><button class="btn primary" onclick="scholarshipPayment('+o.id+')">Unlock</button></div>':'')+'<div style="display:flex;gap:8px;margin-top:15px"><button class="btn primary" onclick="openOpportunity('+o.id+')">'+(paid?'View locked details →':'View details →')+'</button><button class="btn" onclick="toggleSave('+o.id+')">'+(isSaved?'★ Saved':'☆ Save')+'</button></div></article>';
   }).join('')||'<article class="card"><h3>No matching signals</h3><p>Try another search. The algorithm has not yet conquered the entire universe.</p></article>';
   $("radarCount").textContent=list.length;
   updateSavedCount();
 }
 
-function openOpportunity(id){const o=opportunities.find(x=>x.id===id);if(!o)return;if(o.type==="Work"){toast("Work listings are 18+ and are shown for discovery only.",false);return}if(!verifiedUser){openAuth("login");return}showOpportunityDetail(o)}
+function openOpportunity(id){const o=opportunities.find(x=>x.id===id);if(!o)return;if(o.type==="Work"){toast("Work listings are 18+ and are shown for discovery only.",false);return}if(!verifiedUser){openAuth("login");return}if(isPaidScholarship(o)){hasScholarshipAccess(o.id).then(ok=>ok?showOpportunityDetail(o):scholarshipPayment(o));return}showOpportunityDetail(o)}
 function showOpportunityDetail(o){
   let m=$("opportunityDetail");
   if(!m){
@@ -85,7 +106,7 @@ document.querySelectorAll("[data-scroll]").forEach(b=>b.addEventListener("click"
 document.querySelectorAll("[data-filter]").forEach(b=>b.addEventListener("click",()=>{document.querySelectorAll("[data-filter]").forEach(x=>x.classList.remove("active"));b.classList.add("active");filter=b.dataset.filter;renderOpps()}));
 $("search").addEventListener("input",renderOpps);$("signupBtn").onclick=()=>openAuth("signup");$("heroSignup").onclick=()=>openAuth("signup");$("loginBtn").onclick=()=>openAuth("login");$("closeAuth").onclick=closeAuth;$("sendOtp").onclick=sendCode;$("verifyOtp").onclick=async()=>{const {data}=await db.auth.getSession();if(data.session) await finishAccess(data.session.user);else toast("Open the latest verification email first, then return here.",false)};$("resendOtp").onclick=sendCode;$("changeEmail").onclick=()=>openAuth(mode);$("switchLogin").onclick=()=>openAuth("login");$("logoutBtn").onclick=logout;$("authModal").addEventListener("click",e=>{if(e.target.id==="authModal")closeAuth()});
 db.auth.onAuthStateChange((_event,session)=>{if(session?.user)finishAccess(session.user)});
-renderOpps();updateSavedCount();restoreSession();setTimeout(()=>{refreshBilling();loadAdminConsole()},500);
+renderOpps();updateSavedCount();restoreSession();handleScholarshipReturn();setTimeout(()=>{refreshBilling();loadAdminConsole()},500);
 
 
 /* AUTH-FIRST ENTRY GATE */
